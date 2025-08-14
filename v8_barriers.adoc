@@ -1,0 +1,18 @@
+_Thank you to the V8 team for their presentation to the J group in April 2024. This section is based on their presentation._
+  
+V8 has a write barrier that is used both for generational GC and for concurrent marking. Compaction happens during a stop the world pause and no read barrier is required. 
+
+The behavior of the write barrier is determined by whether a Full GC is in progress. If so, both the generational and concurrent marking barriers run. Otherwise, only the generational barrier runs. The fast path of the barrier performs the following checks:
+
+1. Is the object an Smi (small integer), determined via bit check? If not, skip.
+2. Is the object in the old generation, determined via page flags? Or is a Full GC in Progress? If not, skip.
+3. Is the object in the old gemeration, determined via page flags? Or is a Full GC in Progress? If not, skip.
+4. Otherwise, run slow path (update remembered set, notify GC).
+
+The generational barrier introduces 1-3% performance overhead, depending on the workload. The marking barrier is less important, since it is only active during a Full GC (<1-2% runtime). There are substantial code size overheads (7 instructions for the inline write barrier + 7 instructions for out of line code.
+
+Opportunities:
+
+* A cheap mechanism to identify relevant writes that should trigger the barrier. E.g., perform the Smi/old generation checks in hardware (e.g., using memory tagging).
+* A cheap mechanism to handle the slow path. It does not need to be processed immediately but can be handled asynchronously (e.g., put the value into a buffer).
+* Reduce the number of instructions to implement the barrier (including number of dependent loads).
